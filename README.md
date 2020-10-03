@@ -4,6 +4,8 @@ This project aims to demonstrate understanding in:
 * X509 Certificates
 * Proxy Servers
 
+It was written as a solution to MMN 16 in *Data security in Software Systems (22923)* course.
+
 ## How it works?
 The proxy imitates a Men-In-The-Middle attack by hijacking the connection a **Client** is initiating to a **Server** and impersonate itself as the server.
 
