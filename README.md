@@ -2,6 +2,7 @@
 This project aims to demonstrate understanding in:
 * SSL/TLS Protocol
 * X509 Certificates
+* Proxy Servers
 
 ## How it works?
 The proxy imitates a Men-In-The-Middle attack by hijacking the connection a **Client** is initiating to a **Server** and impersonate itself as the server.
@@ -89,7 +90,9 @@ In our project, there are 4 HandlerLayers:
 ![Build sample](./diagrams/build.gif)
 
 ## Running:
-To run the proxy server, use `./scripts/run_proxy.sh`.
+To run the proxy server, use `./scripts/run_proxy.sh --ip <ip to bind>`.
+
+To choose an IP for the server to bind to, you can use `ifconfig` command when using linux, find the main IP address used by your machine and choose an available IP from the same subnet (there is an example below in the explanation on the `--ip` flag).
 
 The script will setup some `iptables` rules to forward all traffic destined to TCP port 443 to the proxy server.
 
@@ -101,9 +104,13 @@ The scripts accepts the following flags:
   * **2** - Transparent and Explicit Proxy
   
   Default value is **2**.
-* `--ip` - Set the listening IP of the proxy server. The script will create a new interface named `lo:2` and the proxy server will use it for connections.
+* `--ip` - Set the listening IP of the proxy server. The script will create a new interface named `tls_proxy` and the proxy server will use it for connections.
   
-  The default value is `192.168.244.1`.
+  There is no default value and you must supply an ip.
+
+  This ip should be accessible from the outside network.
+
+  **Example**: If your main ip address is `192.168.1.1`, you can use `192.168.1.2` (if it is avaiable).
 * `--port` - Set the listening port of the proxy server.
   
   The default value is `5443`.
@@ -119,21 +126,70 @@ The scripts accepts the following flags:
   The default value is `ALL`.
 
 ## How to test it?
-Start the server using `./scripts/run_proxy.sh`.
-
-Now open a different shell (unless you run the server with `&` which will run it in the background).
-
 ### Transparent-Proxy
-* **RSA Certificate** - `curl https://rsa2048.badssl.com -o /dev/null --verbose --trace session.log; grep "Server certificate" -A6 session.log`
+Start the server using `./scripts/run_proxy.sh --ip <ip to bind> --mode 2`.
+Now open a different shell for the client.
 
-* **EC Certificate** - `curl https://ecc256.badssl.com -o /dev/null --verbose --trace session.log; grep "Server certificate" -A6 session.log`
+* **RSA Certificate** - `curl https://rsa2048.badssl.com -o /dev/null --verbose --trace session.log; grep "Server certificate" -A6 session.log`.
+
+**Expected output**:
+```
+== Info: Server certificate:
+== Info:  subject: C=US; ST=California; L=Walnut Creek; O=Lucas Garron Torres; CN=*.badssl.com
+== Info:  start date: Mar 23 00:00:00 2020 GMT
+== Info:  expire date: May 17 12:00:00 2022 GMT
+== Info:  subjectAltName: host "rsa2048.badssl.com" matched cert's "*.badssl.com"
+== Info:  issuer: C=IL; ST=Some-State; O=DROR
+== Info:  SSL certificate verify ok.
+```
+
+* **EC Certificate** - `curl https://ecc256.badssl.com -o /dev/null --verbose --trace session.log; grep "Server certificate" -A6 session.log`.
+
+**Expected output**:
+```
+== Info: Server certificate:
+== Info:  subject: C=US; ST=California; L=Walnut Creek; O=Lucas Garron Torres; CN=*.badssl.com
+== Info:  start date: Feb  5 00:00:00 2020 GMT
+== Info:  expire date: Feb 10 12:00:00 2022 GMT
+== Info:  subjectAltName: host "ecc256.badssl.com" matched cert's "*.badssl.com"
+== Info:  issuer: C=IL; ST=Some-State; O=DROR
+== Info:  SSL certificate verify ok.
+```
 
 ![Transparent-Proxy example](./diagrams/transparent-proxy.gif)
 
 ### Explicit-Proxy
-This will bypass the `iptables` rules - `curl https://tls-v1-2.badssl.com:1012 -o /dev/null --verbose --trace session.log; grep "Server certificate" -A6 session.log`
+Start the server using `./scripts/run_proxy.sh --ip <ip to bind> --mode 1` (in this example we used `192.168.244.1`).
+Now open a different shell for the client.
 
-So use explicitly - `curl https://tls-v1-2.badssl.com:1012 -o /dev/null --verbose --trace session.log --proxy1.0 http://192.168.244.1:5443; grep "Server certificate" -A6 session.log`
+Using the same commands from the example of the **Transparent-Proxy** will not work as in this case there are no `iptables` rules configured.
+Simple example of when to use an explicit proxy is if the port used is non-standard **443** port.
+
+Trying  this `curl https://tls-v1-2.badssl.com:1012 -o /dev/null --verbose --trace session.log; grep "Server certificate" -A6 session.log` will not use the proxy.
+
+**Example output**:
+```
+== Info: Server certificate:
+== Info:  subject: C=US; ST=California; L=Walnut Creek; O=Lucas Garron Torres; CN=*.badssl.com
+== Info:  start date: Mar 23 00:00:00 2020 GMT
+== Info:  expire date: May 17 12:00:00 2022 GMT
+== Info:  subjectAltName: host "tls-v1-2.badssl.com" matched cert's "*.badssl.com"
+== Info:  issuer: C=US; O=DigiCert Inc; CN=DigiCert SHA2 Secure Server CA
+== Info:  SSL certificate verify ok.
+```
+
+So use explicitly - `curl https://tls-v1-2.badssl.com:1012 -o /dev/null --verbose --trace session.log --proxy1.0 http://192.168.244.1:5443; grep "Server certificate" -A6 session.log`.
+
+**Example output**:
+```
+== Info: Server certificate:
+== Info:  subject: C=US; ST=California; L=Walnut Creek; O=Lucas Garron Torres; CN=*.badssl.com
+== Info:  start date: Mar 23 00:00:00 2020 GMT
+== Info:  expire date: May 17 12:00:00 2022 GMT
+== Info:  subjectAltName: host "tls-v1-2.badssl.com" matched cert's "*.badssl.com"
+== Info:  issuer: C=IL; ST=Some-State; O=DROR
+== Info:  SSL certificate verify ok.
+```
 
 ![Explicit-Proxy example](./diagrams/explicit-proxy.gif)
 
